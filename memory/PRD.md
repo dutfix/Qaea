@@ -1,5 +1,13 @@
 # PRD — Mello (previously LinguaConnect)
 
+## 2026-09-19 — publish readiness after fresh fork (CURRENT)
+- Fork had LOST backend/.env + frontend/.env (root .gitignore ignores *.env) → backend crashed (KeyError MONGO_URL). Recreated both: backend (MONGO_URL local, DB_NAME linguaconnect, NEW JWT_SECRET, CORS *, EMERGENT_LLM_KEY, EMERGENT_PUSH_KEY placeholder); frontend (EXPO_PUBLIC_BACKEND_URL/EXPO_PACKAGER_* = preview URL, EXPO_TUNNEL_SUBDOMAIN, EXPO_USE_FAST_RESOLVER). RevenueCat public keys were NOT recoverable (lost with .env) — /vip paywall will show setup-unavailable until user re-supplies EXPO_PUBLIC_REVENUECAT_* keys.
+- Local Mongo was empty: admin seeded on startup; ran `python backend/seed.py` (9 demo users + 6 moments, Demo1234!). QA accounts in memory/test_credentials.md.
+- Android build hygiene: regenerated genuine `frontend/yarn.lock` (yarn install), DELETED package-lock.json (packageManager is yarn@1.22.22); removed dead `postinstall: patch-package` + patch-package dep (patches/ dir was gone; react-native-webrtc 124.0.8 vendors event-target-shim, so old patch is obsolete). `yarn install --frozen-lockfile` PASS, `expo install --check` up to date (expo 57.0.24), tsc 0 errors, `expo config --type prebuild` PASS, `expo export --platform android --no-bytecode` PASS.
+- app.config.js now SMART google-services guard: attaches googleServicesFile only if the JSON has an Android client for the final `android.package` (supports GOOGLE_SERVICES_JSON env file too); on mismatch it drops the file with a loud warning so Gradle never fails with "No matching client found" — push simply unavailable in that build. Added android.versionCode 1 / ios.buildNumber "1".
+- REAL EAS build log (2026-09-19): PREBUILD failed ENOENT '/workspace/source/frontend/google-services.json' — pipeline evaluates app.config.js in /workspace/source/frontend, writes RESOLVED config to app.json, EAS builds elsewhere. FIXED: app.config.js now always returns a project-RELATIVE './google-services.json' (recovers stale absolute paths by basename; drops file only on package mismatch). Removed `newArchEnabled` (SDK57 schema rejects it), versionCode/buildNumber (remote version source). Added expo.doctor.reactNativeDirectoryCheck.exclude for incall-manager/webrtc. expo-doctor 21/21, prebuild simulated in separate dir PASS, testing agent verified 6/6. NOTE: pipeline replaces .env EXPO_PUBLIC_BACKEND_URL with https://app-release-ready-4.emergent.host at build; app.json package stayed com.emergent.communityspeak.z97eev (matches Firebase).
+- Backend fresh-DB regression 26/26 PASS (auth/users/chats/moments/rooms/ws). UI signup→onboarding verified by screenshot. Full UI regression pending user permission.
+
 ## Latest direction: user will perform acceptance testing
 - User: “অসমাপ্ত কাজ গুলো কর … এন্ড্রয়েডের apk বিল্ড … সমস্যা … সমাধান … নিজের থেকে কোন টেস্ট করতে হবে না আমি টেস্ট করব”. Focusremainingcode/buildwork; don'tlaunchanotherbroadUIacceptancerun. Requiredsource/buildvalidationremainsdistinctfromuseracceptance. Don'tclaimactualsignedAPK/nativepushdeliveryuntilrealbuild.
 - Beforethatinstruction, tester54completed31/31(22translation/reaction+9branding)PASS; controlledpending-fontCDPsplashcapturePASSandstartupafterreleasePASS. MainrealChatunsupportedTelugu->ENexactoriginalwithnowarning+supportedBNtranslationPASS. LogoalphaandseparateopaqueiOSassetverified.
@@ -272,7 +280,7 @@ Note: Daily streak (backend touch_streak + profile/user page display) already ex
 
 ## Deployment readiness fixes (this session — deployment_agent PASS)
 ✅ .gitignore: removed .env/.env.*/*.env blocks (env files must be tracked for deploys)
-✅ frontend/.env: added EXPO_TUNNEL_SUBDOMAIN=elevate-familiar
+✅ frontend/.env: added EXPO_TUNNEL_SUBDOMAIN=app-release-ready-4
 ✅ Supervisor expo command now `expo start --tunnel --port 3000` + @expo/ngrok devDep installed
 ⚠️ ngrok install re-hoisted event-target-shim@6 to root → Metro "Missing ./index specifier" (react-native-webrtc imports event-target-shim/index). Fixed via patch-package: patches/event-target-shim+6.0.2.patch (adds "./index" export) + postinstall script. DO NOT REMOVE the patch or postinstall.
 ✅ N+1 queries batched ($in + map): moments.py (list authors, comment authors), chats.py (list partners; conversation_public/moment_public accept optional prefetched doc), rooms.py (list hosts)

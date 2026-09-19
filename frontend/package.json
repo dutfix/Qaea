@@ -9,8 +9,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint",
-    "postinstall": "patch-package"
+    "lint": "expo lint"
   },
   "dependencies": {
     "@babel/core": "7.29.7",
@@ -63,7 +62,6 @@
     "expo-web-browser": "~57.0.2",
     "lottie-react-native": "~7.3.1",
     "lucide-react-native": "^1.31.0",
-    "patch-package": "^8.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -91,5 +89,16 @@
     "ws": "^8.21.0"
   },
   "private": true,
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "react-native-incall-manager",
+          "react-native-webrtc"
+        ],
+        "listUnknownPackages": false
+      }
+    }
+  }
 }
