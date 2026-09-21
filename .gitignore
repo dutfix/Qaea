@@ -87,3 +87,6 @@ credentials.json
 
 # Metro bundler cache
 frontend/.metro-cache/
+.env
+.env.*
+*.env
