@@ -9,7 +9,7 @@
 import { Ionicons } from "@/src/ui/icons";
 import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -29,6 +29,7 @@ import { BackButton } from "@/src/components/BackButton";
 import { useAuth } from "@/src/context/AuthContext";
 import { useTheme } from "@/src/context/ThemeContext";
 import { fonts, spacing, ThemeColors } from "@/src/theme";
+import { GoogleGlyph } from "@/src/ui/GoogleGlyph";
 
 type FieldKey = "name" | "email" | "password";
 type Mode = "login" | "register";
@@ -45,7 +46,8 @@ export default function AuthScreen() {
   const [focused, setFocused] = useState<FieldKey | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const { login, register } = useAuth();
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const { login, register, signInWithGoogle, googleError, user } = useAuth();
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const submitting = useRef(false);
@@ -67,11 +69,45 @@ export default function AuthScreen() {
   const nameValid = isLogin || name.trim().length >= 1;
   const formValid = emailValid && (isLogin ? password.length > 0 : passwordValid) && nameValid;
 
-  const routeAfterAuth = (u: { native_language?: string | null; learning_language?: string | null }) => {
-    if (!u.native_language || !u.learning_language) {
-      router.replace("/onboarding");
-    } else {
-      router.replace("/(tabs)/connect");
+  const routeAfterAuth = useCallback(
+    (u: { native_language?: string | null; learning_language?: string | null }) => {
+      if (!u.native_language || !u.learning_language) {
+        router.replace("/onboarding");
+      } else {
+        router.replace("/(tabs)/connect");
+      }
+    },
+    [router],
+  );
+
+  // Single owner of post-auth navigation: whichever path signs the user in
+  // (email form, Google auth-session result, or a hot deep link that landed
+  // while this screen was open), the screen must change once `user` exists.
+  const routedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user || routedFor.current === user.id) return;
+    routedFor.current = user.id;
+    routeAfterAuth(user);
+  }, [user, routeAfterAuth]);
+
+  // Surface Google failures (including cold-start ones) in the same error row.
+  useEffect(() => {
+    if (googleError) setError(googleError);
+  }, [googleError]);
+
+  const startGoogle = async () => {
+    if (busy || googleBusy) return;
+    setError(null);
+    Keyboard.dismiss();
+    setGoogleBusy(true);
+    try {
+      await signInWithGoogle();
+      // Success is handled by the `user` effect above; `null` = cancelled or
+      // web navigation in progress — nothing to show.
+    } catch (e) {
+      setError(humanizeError(e instanceof Error ? e.message : "Google sign-in didn't complete."));
+    } finally {
+      if (Platform.OS !== "web") setGoogleBusy(false);
     }
   };
 
@@ -107,7 +143,9 @@ export default function AuthScreen() {
       const authedUser = isLogin
         ? await login(email.trim(), password)
         : await register(email.trim(), password, name.trim());
-      routeAfterAuth(authedUser);
+      // Navigation happens in the `user` effect; guard against a stale race
+      // where the context user was already this account.
+      if (routedFor.current === authedUser.id) routeAfterAuth(authedUser);
     } catch (e) {
       setError(humanizeError(e instanceof Error ? e.message : "Something went wrong"));
     } finally {
@@ -121,7 +159,7 @@ export default function AuthScreen() {
     focused === key && styles.inputWrapFocused,
   ];
 
-  const bothBusy = busy;
+  const bothBusy = busy || googleBusy;
 
 
   // ── render ───────────────────────────────────────────────────────────
@@ -337,6 +375,35 @@ export default function AuthScreen() {
               </View>
             </Pressable>
 
+            <View style={styles.dividerRow} accessibilityElementsHidden>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <Pressable
+              testID="auth-google-btn"
+              accessibilityRole="button"
+              accessibilityLabel="Continue with Google"
+              accessibilityState={{ disabled: bothBusy, busy: googleBusy }}
+              style={({ pressed }) => [
+                styles.googleBtn,
+                pressed && { opacity: 0.85 },
+                busy && { opacity: 0.5 },
+              ]}
+              onPress={() => { void startGoogle(); }}
+              disabled={bothBusy}
+            >
+              {googleBusy ? (
+                <ActivityIndicator color={colors.onSurface} />
+              ) : (
+                <>
+                  <GoogleGlyph size={20} testID="auth-google-glyph" />
+                  <Text style={styles.googleText}>Continue with Google</Text>
+                </>
+              )}
+            </Pressable>
+
             <Pressable
               testID="auth-switch-mode-btn"
               accessibilityRole="button"
@@ -390,6 +457,11 @@ const makeStyles = (colors: ThemeColors) =>
     submitWrap: { marginTop: spacing.xs, borderRadius: 999, overflow: "hidden", backgroundColor: colors.onSurface },
     submitBtn: { minHeight: 52, alignItems: "center", justifyContent: "center", paddingVertical: 15, paddingHorizontal: spacing.lg },
     submitText: { fontFamily: fonts.textBold, fontSize: 15, color: colors.surface },
+    dividerRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.lg, marginBottom: spacing.md },
+    dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.divider },
+    dividerText: { fontFamily: fonts.text, fontSize: 12, color: colors.onSurfaceSecondary },
+    googleBtn: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, borderRadius: 999, borderWidth: 1, borderColor: colors.divider, backgroundColor: colors.surface, paddingVertical: 14, paddingHorizontal: spacing.lg },
+    googleText: { fontFamily: fonts.textSemi, fontSize: 14.5, color: colors.onSurface },
     switchBtn: { minHeight: 48, alignItems: "center", justifyContent: "center", marginTop: spacing.xl, paddingVertical: spacing.md },
     switchPrompt: { fontFamily: fonts.text, fontSize: 13, color: colors.onSurfaceSecondary, textAlign: "center", lineHeight: 20 },
     switchText: { fontFamily: fonts.textBold, fontSize: 13, color: colors.onSurface },

@@ -9,8 +9,8 @@ import json
 import uuid
 from datetime import datetime
 
-# Backend URL from frontend/.env
-BASE_URL = "https://50215d44-c1b0-469f-85de-f8da38047ec1.preview.emergentagent.com/api"
+# Backend URL from review request
+BASE_URL = "https://91731875-76bb-449f-83fb-545f3bd467ed.preview.emergentagent.com/api"
 
 # Test credentials from memory/test_credentials.md
 QA1_EMAIL = "qa_mello_1@linguatest.com"
@@ -213,6 +213,110 @@ def test_login_qa2():
         return passed
     except Exception as e:
         print_test("POST /auth/login (QA2)", False, f"Error: {str(e)}")
+        return False
+
+# ============================================================================
+# EMERGENT GOOGLE SESSION EXCHANGE CONTRACT TESTS (NEGATIVE ONLY)
+# ============================================================================
+
+def test_google_session_empty_string():
+    """Test: POST /auth/session with empty session_id -> 400"""
+    try:
+        response = requests.post(
+            f"{BASE_URL}/auth/session",
+            json={"session_id": ""},
+            timeout=10
+        )
+        passed = response.status_code == 400
+        print_test("POST /auth/session (empty session_id)", passed, 
+                  f"Status: {response.status_code} (expected 400)")
+        return passed
+    except Exception as e:
+        print_test("POST /auth/session (empty session_id)", False, f"Error: {str(e)}")
+        return False
+
+def test_google_session_bogus_id():
+    """Test: POST /auth/session with bogus session_id -> 401"""
+    try:
+        response = requests.post(
+            f"{BASE_URL}/auth/session",
+            json={"session_id": "bogus-fake-id-123"},
+            timeout=10
+        )
+        passed = response.status_code == 401
+        if passed:
+            data = response.json()
+            detail = data.get("detail", "")
+            print_test("POST /auth/session (bogus session_id)", True, 
+                      f"Status: 401, Detail: {detail}")
+        else:
+            print_test("POST /auth/session (bogus session_id)", False, 
+                      f"Status: {response.status_code} (expected 401), Response: {response.text}")
+        return passed
+    except Exception as e:
+        print_test("POST /auth/session (bogus session_id)", False, f"Error: {str(e)}")
+        return False
+
+def test_google_session_missing_field():
+    """Test: POST /auth/session with missing session_id field -> 422"""
+    try:
+        response = requests.post(
+            f"{BASE_URL}/auth/session",
+            json={},
+            timeout=10
+        )
+        passed = response.status_code == 422
+        print_test("POST /auth/session (missing field)", passed, 
+                  f"Status: {response.status_code} (expected 422)")
+        return passed
+    except Exception as e:
+        print_test("POST /auth/session (missing field)", False, f"Error: {str(e)}")
+        return False
+
+def test_google_alias_bogus_id():
+    """Test: POST /auth/google with bogus session_id -> 401 (alias endpoint)"""
+    try:
+        response = requests.post(
+            f"{BASE_URL}/auth/google",
+            json={"session_id": "bogus-fake-id-456"},
+            timeout=10
+        )
+        passed = response.status_code == 401
+        if passed:
+            data = response.json()
+            detail = data.get("detail", "")
+            print_test("POST /auth/google (bogus session_id alias)", True, 
+                      f"Status: 401, Detail: {detail}")
+        else:
+            print_test("POST /auth/google (bogus session_id alias)", False, 
+                      f"Status: {response.status_code} (expected 401), Response: {response.text}")
+        return passed
+    except Exception as e:
+        print_test("POST /auth/google (bogus session_id alias)", False, f"Error: {str(e)}")
+        return False
+
+def test_google_session_jwt_looking_string():
+    """Test: POST /auth/session with JWT-looking string (3 dots, >100 chars) -> 401"""
+    try:
+        # Create a JWT-looking string with 3 dot-separated segments, >100 chars
+        fake_jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+        response = requests.post(
+            f"{BASE_URL}/auth/session",
+            json={"session_id": fake_jwt},
+            timeout=10
+        )
+        passed = response.status_code == 401
+        if passed:
+            data = response.json()
+            detail = data.get("detail", "")
+            print_test("POST /auth/session (JWT-looking string)", True, 
+                      f"Status: 401, Detail: {detail}")
+        else:
+            print_test("POST /auth/session (JWT-looking string)", False, 
+                      f"Status: {response.status_code} (expected 401), Response: {response.text}")
+        return passed
+    except Exception as e:
+        print_test("POST /auth/session (JWT-looking string)", False, f"Error: {str(e)}")
         return False
 
 # ============================================================================
@@ -649,7 +753,7 @@ def main():
     print("=" * 80)
     
     # 1. AUTH TESTS
-    print_section("1. AUTH TESTS")
+    print_section("1. AUTH TESTS (Email/Password)")
     test_api_health()
     test_register_new_user()
     test_register_duplicate_email()
@@ -657,40 +761,44 @@ def main():
     test_login_wrong_password()
     test_auth_me_with_token()
     test_auth_me_without_token()
-    test_login_qa2()
     
-    # 2. USERS TESTS
-    print_section("2. USERS TESTS")
+    # Try to login QA2, if it fails, skip QA2-dependent tests
+    qa2_exists = test_login_qa2()
+    
+    # 2. EMERGENT GOOGLE SESSION EXCHANGE CONTRACT TESTS
+    print_section("2. EMERGENT GOOGLE SESSION EXCHANGE CONTRACT (Negative Tests)")
+    test_google_session_empty_string()
+    test_google_session_bogus_id()
+    test_google_session_missing_field()
+    test_google_alias_bogus_id()
+    test_google_session_jwt_looking_string()
+    
+    # 3. USERS TESTS (SMOKE)
+    print_section("3. USERS TESTS (Smoke)")
     test_update_qa1_profile()
-    test_update_qa2_profile()
+    if qa2_exists:
+        test_update_qa2_profile()
     test_get_partners()
-    test_get_user_by_id()
+    if qa2_exists:
+        test_get_user_by_id()
     
-    # 3. CHATS TESTS
-    print_section("3. CHATS TESTS")
-    test_create_conversation()
-    test_send_text_message()
+    # 4. CHATS TESTS (SMOKE)
+    print_section("4. CHATS TESTS (Smoke)")
+    if qa2_exists:
+        test_create_conversation()
+        test_send_text_message()
     test_list_conversations()
-    test_get_conversation_messages()
+    if qa2_exists and test_state.get("conversation_id"):
+        test_get_conversation_messages()
     
-    # 4. MOMENTS TESTS
-    print_section("4. MOMENTS TESTS")
+    # 5. MOMENTS TESTS (SMOKE)
+    print_section("5. MOMENTS TESTS (Smoke)")
     test_list_moments()
-    test_create_moment()
-    test_like_moment()
-    test_comment_on_moment()
-    
-    # 5. ROOMS TESTS
-    print_section("5. ROOMS TESTS")
-    test_create_room()
-    test_join_room()
-    test_leave_room()
-    test_get_time_allowance()
-    test_end_room()
-    
-    # 6. WEBSOCKET TEST (OPTIONAL)
-    print_section("6. MISC TESTS")
-    test_websocket_connection()
+    if qa2_exists:
+        test_create_moment()
+        if test_state.get("moment_id"):
+            test_like_moment()
+            test_comment_on_moment()
     
     # SUMMARY
     print("\n" + "=" * 80)

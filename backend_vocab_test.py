@@ -9,7 +9,7 @@ import json
 from typing import Dict, Any, Optional
 
 # Base URL from frontend/.env
-BASE_URL = "https://app-release-ready-4.preview.emergentagent.com/api"
+BASE_URL = "https://auth-fix-166.preview.emergentagent.com/api"
 
 # Test credentials
 TEST_EMAIL = "mei@demo.com"

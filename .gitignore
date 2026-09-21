@@ -78,7 +78,6 @@ agenthub/agents/youtube/db
 # Build caches
 .cache/
 
-memory/test_credentials.md
 
 # Mobile development
 android-sdk/
@@ -88,6 +87,3 @@ credentials.json
 
 # Metro bundler cache
 frontend/.metro-cache/
-.env
-.env.*
-*.env

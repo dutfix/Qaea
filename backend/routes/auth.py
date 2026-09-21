@@ -101,17 +101,25 @@ class GoogleSessionIn(BaseModel):
 
 
 @router.post("/google")
+@router.post("/session")
 async def google_login(body: GoogleSessionIn):
-    """Exchange an Emergent OAuth ``session_id`` for a LinguaConnect JWT.
+    """Exchange an Emergent OAuth ``session_id`` for a Mello JWT.
 
-    The Emergent auth widget hands the frontend a one-time ``session_id``
-    after Google finishes. We look that up server-side, upsert/find the
-    matching user, and mint a normal JWT so downstream endpoints keep using
-    the same `Authorization: Bearer` pattern as email/password flows.
+    Exposed as both ``/auth/google`` (legacy client name) and ``/auth/session``
+    (Emergent playbook contract). The Emergent auth page hands the frontend a
+    one-time ``session_id`` after Google finishes. We look that up
+    server-side (the ONLY call to Emergent in the flow), find-or-create the
+    matching user by email, and mint the app's normal JWT so downstream
+    endpoints keep using the same `Authorization: Bearer` pattern as
+    email/password flows. The response carries the JWT under both ``token``
+    and ``session_token`` keys.
     """
     session_id = (body.session_id or "").strip()
     if not session_id:
         raise HTTPException(400, "session_id required")
+    # A 7-day session_token must never be sent here — only a fresh session_id.
+    if session_id.count(".") == 2 and len(session_id) > 100:
+        raise HTTPException(401, "Invalid or expired Google session")
 
     # 1. Resolve session with Emergent
     try:
@@ -181,4 +189,5 @@ async def google_login(body: GoogleSessionIn):
             if not doc:
                 raise HTTPException(500, "Auth race — please retry")
 
-    return {"token": create_access_token(doc["_id"]), "user": user_public(doc)}
+    token = create_access_token(doc["_id"])
+    return {"token": token, "session_token": token, "user": user_public(doc)}

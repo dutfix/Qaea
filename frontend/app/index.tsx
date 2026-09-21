@@ -13,11 +13,14 @@ import { useTheme } from "@/src/context/ThemeContext";
  * welcome / auth screen.
  */
 export default function Index() {
-  const { user, loading } = useAuth();
+  const { user, loading, googleError } = useAuth();
   const { colors } = useTheme();
 
   if (loading) return <BrandSplash testID="app-loading" backgroundColor={colors.surface} />;
 
+  // A failed Google callback (web redirect / cold start) lands here; show the
+  // login screen so the reason is visible and the user can retry.
+  if (!user && googleError) return <Redirect href="/auth?mode=login" />;
   if (!user) return <Redirect href="/welcome" />;
 
   if (!user.native_language || !user.learning_language) {
